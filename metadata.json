@@ -1,0 +1,8 @@
+{
+  "name": "Remix Nails Studio - Victoria Córdoba",
+  "description": "Estudio de estética de uñas profesional con catálogo de servicios, reserva de turnos online y pago de seña por transferencia o link de pago.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

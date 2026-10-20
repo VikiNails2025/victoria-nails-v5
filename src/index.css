@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, .font-display, .font-serif-brand {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+  }
+}
+
+/* Atmospheric Pink & Violet background gradient exactly as in the reference image */
+.bg-ambient-beauty {
+  background: 
+    radial-gradient(circle at 10% 12%, rgba(244, 114, 182, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 90% 8%, rgba(216, 180, 254, 0.25) 0%, transparent 50%),
+    radial-gradient(circle at 50% 40%, rgba(253, 242, 248, 0.8) 0%, transparent 70%);
+}
+
+/* Floating card frame with thick white border exactly as shown on the right */
+.showcase-card {
+  border: 4px solid #ffffff;
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 40px -12px rgba(120, 50, 150, 0.16), 0 0 0 1px rgba(244, 114, 182, 0.15);
+  overflow: hidden;
+}
+
+/* Pill buttons matching the reference image */
+.btn-pink-pill {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 50%, #d946ef 100%);
+  color: #ffffff;
+  border-radius: 9999px;
+  font-weight: 600;
+  box-shadow: 0 4px 15px -1px rgba(236, 72, 153, 0.35);
+  transition: all 0.2s ease;
+}
+.btn-pink-pill:hover {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 50%, #c026d3 100%);
+  box-shadow: 0 6px 20px 0 rgba(236, 72, 153, 0.45);
+  transform: translateY(-1px);
+}
+.btn-pink-pill:active {
+  transform: translateY(1px);
+}
+
+.btn-dark-pill {
+  background-color: #1f1625;
+  color: #ffffff;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.btn-dark-pill:hover {
+  background-color: #2d2036;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #f472b6;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c084fc;
+}
