@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Phone,
   ShieldCheck,
+  Upload,
   Sparkles,
   User,
   X
@@ -19,6 +20,8 @@ import {
   calculateEndTime,
   formatLongDate,
   formatMoney,
+  localDateStr,
+  readFileAsCompressedDataUrl,
 } from '../services/storage';
 
 interface BookingModalProps {
@@ -55,33 +58,50 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [isCopiedCvu, setIsCopiedCvu] = useState(false);
   const [isCopiedAmount, setIsCopiedAmount] = useState(false);
   const [transferReported, setTransferReported] = useState(false);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
 
   // Slots for the selected date
   const [availableSlots, setAvailableSlots] = useState<
     { time: string; available: boolean; reason?: string }[]
   >([]);
 
-  // Initialize service when prop changes
+  // Initialize service and step ONLY when the modal opens or the chosen service changes.
+  // (No debe depender de `services`: la web recarga esa lista en cada evento de sincronización,
+  // por ejemplo al guardar la reserva o al volver a la pestaña, y eso mandaba al cliente
+  // de vuelta al paso 1/2 antes de ver los datos de pago.)
   useEffect(() => {
+    if (!isOpen) return;
     if (selectedService) {
       setCurrentService(selectedService);
       setStep(2); // Go directly to date selection if service was chosen
-    } else if (services.length > 0) {
-      setCurrentService(services[0]);
+    } else {
+      setCurrentService((prev) => prev ?? services[0] ?? null);
       setStep(1);
     }
-  }, [selectedService, services]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedService, isOpen]);
+
+  // Si la lista de servicios llega más tarde (sincronización con el servidor) y todavía no hay uno elegido
+  useEffect(() => {
+    if (!currentService && services.length > 0) {
+      setCurrentService(services[0]);
+    }
+  }, [services, currentService]);
 
   // Set default date to tomorrow or next available day
   useEffect(() => {
     if (isOpen) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const formatted = tomorrow.toISOString().split('T')[0];
+      const formatted = localDateStr(tomorrow);
       setSelectedDate(formatted);
       setSelectedSlot('');
       setCreatedBooking(null);
       setTransferReported(false);
+      setReceiptPreview(null);
+      setReceiptError('');
     }
   }, [isOpen]);
 
@@ -102,7 +122,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const datesList = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + (i + 1));
-    const iso = d.toISOString().split('T')[0];
+    const iso = localDateStr(d);
     const dayName = new Intl.DateTimeFormat('es-AR', { weekday: 'short' }).format(d);
     const dayNum = d.getDate();
     const monthName = new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(d);
@@ -145,6 +165,23 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
   };
 
+  const handleReceiptFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !createdBooking) return;
+    setReceiptLoading(true);
+    setReceiptError('');
+    try {
+      const dataUrl = await readFileAsCompressedDataUrl(file, 900, 0.7);
+      StorageService.attachReceipt(createdBooking.id, dataUrl);
+      setReceiptPreview(dataUrl);
+      setTransferReported(true);
+    } catch {
+      setReceiptError('No se pudo cargar la imagen. Probá con otra captura.');
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
+
   const handleReportTransferDone = () => {
     if (!createdBooking) return;
     StorageService.updateBookingStatus(createdBooking.id, 'transfer_reported');
@@ -173,7 +210,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 {step === 1 && 'Paso 1: Seleccioná tu servicio'}
                 {step === 2 && 'Paso 2: Elegí fecha y horario'}
                 {step === 3 && 'Paso 3: Tus datos de contacto'}
-                {step === 4 && 'Pre-reserva: Datos para transferir la seña'}
+                {step === 4 && 'Datos de pago y comprobante'}
               </span>
             </h2>
           </div>
@@ -276,7 +313,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <span>O elegí otra fecha:</span>
                   <input
                     type="date"
-                    min={new Date().toISOString().split('T')[0]}
+                    min={localDateStr()}
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="border border-pink-200 rounded-lg px-2.5 py-1 text-xs text-neutral-700 bg-white focus:outline-hidden focus:border-purple-500"
@@ -472,11 +509,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-neutral-500">A nombre de:</span>
+                  <span className="text-neutral-500">Cliente:</span>
                   <span className="font-semibold text-neutral-900">{createdBooking.name} ({createdBooking.phone})</span>
                 </div>
                 <div className="flex justify-between border-t border-pink-200/60 pt-1.5 font-medium">
-                  <span className="text-purple-950 font-bold">Seña para confirmar (30%):</span>
+                  <span className="text-purple-950 font-bold">Monto de la seña ({settings.depositPercent}%):</span>
                   <span className="text-sm font-black font-mono text-pink-600">
                     {formatMoney(createdBooking.deposit)}
                   </span>
@@ -560,29 +597,31 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 {/* Optional Mercado Pago Link */}
                 {createdBooking.paymentInfo.link && (
                   <div className="pt-2 border-t border-pink-100 flex items-center justify-between gap-2">
-                    <span className="text-xs text-neutral-600">¿Preferís pagar con link?</span>
+                    <span className="text-xs text-neutral-600">¿Preferís link de pago?</span>
                     <a
                       href={createdBooking.paymentInfo.link}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-bold text-pink-600 hover:text-purple-700 underline"
                     >
-                      <span>Abrir Link de Pago</span>
+                      <span>Abrir link Mercado Pago</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 )}
               </div>
 
-              {/* Next Step / WhatsApp instruction */}
-              <div className="space-y-3">
-                <div className="text-xs text-purple-950 bg-gradient-to-r from-pink-100/70 to-purple-100/70 border border-purple-200 p-3 rounded-xl flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">
-                    !
+              {/* Next Step: enviar comprobante a Victoria */}
+              <div className="p-4 rounded-2xl border-2 border-emerald-300/80 bg-gradient-to-br from-emerald-50/70 via-white to-pink-50/50 space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                    <MessageCircle className="w-4 h-4" />
                   </div>
                   <div>
-                    <strong className="text-purple-950 block font-bold">Paso final para confirmar:</strong>
-                    Realizá la transferencia de <strong>{formatMoney(createdBooking.deposit)}</strong> y envianos el comprobante por WhatsApp a Victoria.
+                    <strong className="text-purple-950 block font-bold text-sm">Mandar Comprobante por Chat a Victoria</strong>
+                    <p className="text-xs text-neutral-600 leading-relaxed mt-0.5">
+                      Realizá la transferencia de <strong>{formatMoney(createdBooking.deposit)}</strong>. Al presionar el botón de abajo se abrirá el chat de WhatsApp con Victoria con todos los datos de tu turno ya redactados. Así ella recibe el aviso inmediatamente, verifica la transferencia y te confirma el turno.
+                    </p>
                   </div>
                 </div>
 
@@ -592,35 +631,70 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   target="_blank"
                   rel="noreferrer"
                   onClick={handleReportTransferDone}
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                  className="w-full py-3.5 bg-[#25D366] hover:bg-[#20ba59] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>Enviar Comprobante por WhatsApp a Victoria</span>
+                  <span>Abrir Chat y Mandar Comprobante por WhatsApp</span>
                 </a>
 
-                {/* Secondary Button: Ya transferí */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleReportTransferDone}
-                    disabled={transferReported}
-                    className={`flex-1 py-2.5 text-xs font-semibold border rounded-xl transition-all ${
-                      transferReported
-                        ? 'bg-purple-100/60 border-purple-200 text-purple-700 cursor-default'
-                        : 'bg-white border-pink-300 text-purple-950 hover:bg-pink-50'
-                    }`}
-                  >
-                    {transferReported ? '✓ Transferencia notificada al estudio' : 'Ya realicé la transferencia'}
-                  </button>
+                {/* Adjuntar captura (opcional) */}
+                <div className="pt-3 border-t border-emerald-200/70 space-y-2">
+                  <label className="inline-flex items-center gap-2 text-xs text-emerald-800 font-semibold cursor-pointer hover:text-emerald-950">
+                    <Upload className="w-4 h-4" />
+                    <span>
+                      {receiptLoading
+                        ? 'Cargando captura...'
+                        : receiptPreview
+                        ? 'Cambiar captura adjunta'
+                        : 'También podés adjuntar captura aquí (opcional):'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReceiptFile}
+                      className="hidden"
+                    />
+                  </label>
 
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2.5 text-xs font-semibold bg-neutral-100 hover:bg-pink-100 text-neutral-700 rounded-xl transition-colors"
-                  >
-                    Listo / Cerrar
-                  </button>
+                  {receiptError && <p className="text-xs text-rose-600 font-semibold">{receiptError}</p>}
+
+                  {receiptPreview && (
+                    <div className="flex items-center gap-3 p-2 bg-white rounded-xl border border-emerald-200">
+                      <img
+                        src={receiptPreview}
+                        alt="Captura del comprobante"
+                        className="w-14 h-14 rounded-lg object-cover border border-neutral-200"
+                      />
+                      <p className="text-[11px] text-emerald-800 leading-snug">
+                        <strong>¡Captura adjuntada!</strong> Victoria la verá en su panel. Para confirmar más rápido,
+                        igual enviale el comprobante por WhatsApp con el botón verde.
+                      </p>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleReportTransferDone}
+                  disabled={transferReported}
+                  className={`px-4 py-2.5 text-xs font-semibold border rounded-xl transition-all ${
+                    transferReported
+                      ? 'bg-purple-100/60 border-purple-200 text-purple-700 cursor-default'
+                      : 'bg-white border-pink-300 text-purple-950 hover:bg-pink-50'
+                  }`}
+                >
+                  {transferReported ? '✓ Transferencia notificada al estudio' : 'Ya realicé la transferencia'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 text-xs font-semibold bg-neutral-100 hover:bg-pink-100 text-neutral-700 rounded-xl transition-colors"
+                >
+                  Cerrar ventana
+                </button>
               </div>
 
             </div>

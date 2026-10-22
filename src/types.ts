@@ -44,6 +44,8 @@ export interface Booking {
   balancePaidAt?: number;
   balancePaymentMethod?: PaymentMethod;
   balanceNotes?: string;
+  // Captura del comprobante de transferencia adjuntada por la clienta (imagen comprimida, data URL)
+  receiptImage?: string;
 }
 
 export interface DaySchedule {

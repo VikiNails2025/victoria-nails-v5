@@ -48,6 +48,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             Cómo funciona
           </button>
           <button
+            onClick={() => onScrollTo('politicas')}
+            className="hover:text-neutral-900 transition-colors whitespace-nowrap"
+          >
+            Políticas
+          </button>
+          <button
             onClick={() => onScrollTo('donde-estamos')}
             className="hover:text-neutral-900 transition-colors whitespace-nowrap"
           >

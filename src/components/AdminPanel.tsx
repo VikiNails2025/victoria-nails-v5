@@ -46,7 +46,8 @@ import {
   formatLongDate,
   formatMoney,
   calculateEndTime,
-  readFileAsCompressedDataUrl
+  readFileAsCompressedDataUrl,
+  localDateStr
 } from '../services/storage';
 
 interface AdminPanelProps {
@@ -88,7 +89,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Financial / Cash register selected date
   const [cashRegisterDate, setCashRegisterDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
+    return localDateStr();
   });
   const [cashRegisterPeriod, setCashRegisterPeriod] = useState<'day' | 'all'>('day');
 
@@ -97,6 +98,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [balanceMethod, setBalanceMethod] = useState<PaymentMethod>('efectivo');
   const [balanceNotesInput, setBalanceNotesInput] = useState<string>('');
   const [balanceSuccessToast, setBalanceSuccessToast] = useState<string | null>(null);
+
+  // Visor de comprobantes (capturas que adjuntan las clientas)
+  const [viewingReceipt, setViewingReceipt] = useState<{ url: string; name: string; code: string } | null>(null);
 
   // Reschedule state modal
   const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null);
@@ -122,7 +126,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Manual booking form
   const [manualSvcId, setManualSvcId] = useState(services[0]?.id || '');
-  const [manualDate, setManualDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [manualDate, setManualDate] = useState(() => localDateStr());
   const [manualStart, setManualStart] = useState('15:00');
   const [manualName, setManualName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
@@ -237,7 +241,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     .filter((b) => {
       if (statusFilter === 'all') return true;
       if (statusFilter === 'today') {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = localDateStr();
         return b.date === todayStr;
       }
       if (statusFilter === 'pending_balance') {
@@ -613,7 +617,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Copy today's schedule for WhatsApp
   const handleCopyTodaySchedule = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDateStr();
     const todayBookings = bookings
       .filter((b) => b.date === todayStr && b.status !== 'cancelled')
       .sort((a, b) => a.start.localeCompare(b.start));
@@ -756,191 +760,262 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
+  // ---------- Navegación del panel (menú lateral) ----------
+  type AdminTabId = typeof activeTab;
+  const navItems: { id: AdminTabId; label: string; icon: React.ReactNode; badge?: number; count?: number; group: string }[] = [
+    { id: 'cash_register', label: 'Caja diaria', icon: <Receipt className="w-4 h-4" />, group: 'Dinero' },
+    { id: 'pending_balances', label: 'Cobro de saldos', icon: <Wallet className="w-4 h-4" />, badge: totalPendingBalancesCount, group: 'Dinero' },
+    { id: 'bookings', label: 'Agenda de turnos', icon: <Calendar className="w-4 h-4" />, count: bookings.length, group: 'Turnos' },
+    { id: 'manual_booking', label: 'Cargar turno', icon: <Plus className="w-4 h-4" />, group: 'Turnos' },
+    { id: 'schedule', label: 'Días y horarios', icon: <Clock className="w-4 h-4" />, group: 'Turnos' },
+    { id: 'blocked_dates', label: 'Feriados', icon: <Ban className="w-4 h-4" />, group: 'Turnos' },
+    { id: 'services', label: 'Servicios y precios', icon: <Sparkles className="w-4 h-4" />, count: services.length, group: 'Web' },
+    { id: 'gallery', label: 'Fotos galería', icon: <ImageIcon className="w-4 h-4" />, count: gallery.length, group: 'Web' },
+    { id: 'settings', label: 'Pagos y Maps', icon: <SettingsIcon className="w-4 h-4" />, group: 'Web' },
+  ];
+
+  const tabTitles: Record<AdminTabId, { title: string; subtitle: string }> = {
+    cash_register: { title: 'Caja diaria y recaudación', subtitle: 'Lo cobrado, lo pendiente y el desglose por medio de pago' },
+    pending_balances: { title: 'Cobro de saldos', subtitle: 'Registrá lo que cada clienta abona en el local' },
+    bookings: { title: 'Agenda de turnos', subtitle: 'Confirmá señas, cobrá saldos y avisá por WhatsApp' },
+    manual_booking: { title: 'Cargar turno manual', subtitle: 'Para reservas por llamada, WhatsApp o en persona' },
+    schedule: { title: 'Días y horarios de trabajo', subtitle: 'Las clientas solo pueden reservar en estos horarios' },
+    blocked_dates: { title: 'Feriados y vacaciones', subtitle: 'Bloqueá fechas puntuales' },
+    services: { title: 'Servicios y precios', subtitle: 'Catálogo que ven las clientas en la web' },
+    gallery: { title: 'Galería de trabajos', subtitle: 'Fotos que se publican en la web' },
+    settings: { title: 'Pagos y ubicación', subtitle: 'Alias, CVU, porcentaje de seña y Google Maps' },
+  };
+
+  const navGroups = ['Dinero', 'Turnos', 'Web'];
+  const todayLabel = formatLongDate(localDateStr());
+
   // ================= STANDALONE FULL-SCREEN DASHBOARD =================
   return (
-    <div className="min-h-screen w-full bg-[#0d0716] text-neutral-100 flex flex-col font-sans selection:bg-pink-500 selection:text-white">
-      
-      {/* Top Application Bar */}
-      <header className="sticky top-0 z-40 bg-[#160a24]/95 backdrop-blur-md border-b border-purple-900/60 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 shadow-lg">
-        {/* Left: Brand & Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                Victoria Nails · Panel de Control & Caja
-              </h1>
-              <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                Dueña / Administradora
-              </span>
+    <div className="min-h-screen w-full bg-[#0d0716] text-neutral-100 flex flex-col lg:flex-row font-sans selection:bg-pink-500 selection:text-white">
+
+      {/* ---------- SIDEBAR (escritorio) ---------- */}
+      <aside className="hidden lg:flex w-64 shrink-0 sticky top-0 h-screen flex-col bg-gradient-to-b from-[#1a0b2b] via-[#160a24] to-[#12071f] border-r border-purple-900/50">
+        <div className="px-5 pt-6 pb-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-pink-500/20">
+              <Sparkles className="w-5 h-5" />
             </div>
-            <p className="text-[11px] text-purple-300/70">
-              Control de recaudación diaria, cobro de saldos, agenda y horarios
-            </p>
+            <div>
+              <p className="font-display text-lg leading-none text-white">Victoria Nails</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-pink-300/80 mt-1">Panel de dueña</p>
+            </div>
           </div>
         </div>
 
-        {/* Right: Quick Return to Public Site & Logout */}
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={onBackToPublicSite}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-pink-200 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-pink-400/30 shadow-xs"
-            title="Volver a la vista del cliente / sitio web principal"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Ver Sitio Web Público</span>
-            <span className="sm:hidden">Web</span>
-          </button>
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+          {navGroups.map((group) => (
+            <div key={group} className="space-y-1">
+              <p className="px-3 text-[10px] uppercase tracking-widest text-purple-400/60 font-bold">{group}</p>
+              {navItems.filter((n) => n.group === group).map((item) => {
+                const active = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all relative ${
+                      active
+                        ? 'bg-gradient-to-r from-pink-500/90 to-purple-600/90 text-white shadow-md'
+                        : 'text-purple-200/75 hover:bg-white/8 hover:text-white'
+                    }`}
+                  >
+                    <span className={active ? 'text-white' : 'text-pink-300/80'}>{item.icon}</span>
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.badge ? (
+                      <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-500/90 text-[#1a0b2b] text-[10px] font-bold flex items-center justify-center">
+                        {item.badge}
+                      </span>
+                    ) : item.count !== undefined ? (
+                      <span className={`text-[10px] font-bold ${active ? 'text-white/80' : 'text-purple-300/50'}`}>{item.count}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
 
-          <button
-            onClick={handleLogout}
-            title="Cerrar sesión de administradora"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-neutral-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors border border-white/10"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Cerrar sesión</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Secret Link Bar - Dueña */}
-      <div className="bg-[#11071c] border-b border-purple-900/40 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-        <div className="flex items-center gap-2 text-purple-200">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="text-[11px] sm:text-xs">
-            <strong className="text-white">Panel Privado:</strong> Sin accesos en la web del cliente. Ingreso exclusivo con tu link y clave.
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="px-3 pb-4 pt-3 space-y-1 border-t border-white/10">
           <button
             type="button"
             onClick={handleCopyPrivateLink}
-            className="flex items-center gap-1.5 px-3 py-1 bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 hover:text-white rounded-lg border border-pink-500/30 font-semibold text-[11px] transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs text-purple-200/80 hover:text-white hover:bg-white/8 transition-colors"
             title="Copiar el link directo #admin a tu portapapeles"
           >
-            {copiedLinkMsg ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedLinkMsg ? '✓ Link copiado' : 'Copiar Mi Enlace Secreto (#admin)'}</span>
+            {copiedLinkMsg ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            <span>{copiedLinkMsg ? '¡Enlace copiado!' : 'Copiar mi enlace secreto'}</span>
+          </button>
+          <button
+            onClick={onBackToPublicSite}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs text-purple-200/80 hover:text-white hover:bg-white/8 transition-colors"
+            title="Volver a la vista del cliente / sitio web principal"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Ver sitio web público</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            title="Cerrar sesión de administradora"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs text-purple-200/80 hover:text-white hover:bg-white/8 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Cerrar sesión</span>
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Navigation Sub-Header (Tabs) */}
-      <nav className="bg-[#1a0c2c] border-b border-purple-900/50 px-4 sm:px-6 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-        <button
-          onClick={() => setActiveTab('cash_register')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'cash_register'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Receipt className="w-4 h-4 text-pink-300" />
-          <span>📊 Caja Diaria & Recaudación</span>
-        </button>
+      {/* ---------- HEADER + MENÚ (celular / tablet) ---------- */}
+      <header className="lg:hidden sticky top-0 z-40 bg-[#160a24]/95 backdrop-blur-md border-b border-purple-900/60 shadow-lg">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-display text-base leading-none text-white">Victoria Nails</p>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-pink-300/80 mt-0.5">Panel de dueña</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleCopyPrivateLink}
+              title="Copiar mi enlace secreto (#admin)"
+              className="p-2 rounded-lg text-purple-200 hover:bg-white/10"
+            >
+              {copiedLinkMsg ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={onBackToPublicSite}
+              title="Ver sitio web público"
+              className="p-2 rounded-lg text-pink-200 bg-white/10 hover:bg-white/20"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Cerrar sesión de administradora"
+              className="p-2 rounded-lg text-purple-200 hover:bg-white/10"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <nav className="flex items-center gap-1.5 px-3 pb-3 overflow-x-auto scrollbar-none">
+          {navItems.map((item) => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                  active
+                    ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
+                    : 'bg-white/8 text-purple-200/85 hover:bg-white/15'
+                }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+                {item.badge ? (
+                  <span className="min-w-4 h-4 px-1 rounded-full bg-amber-500 text-[#1a0b2b] text-[9px] flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
 
-        <button
-          onClick={() => setActiveTab('pending_balances')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'pending_balances'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Wallet className="w-4 h-4 text-emerald-400" />
-          <span>💵 Cobro de Saldos</span>
-          {totalPendingBalancesCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/30 text-amber-300 border border-amber-400/30 font-mono">
-              {totalPendingBalancesCount}
-            </span>
-          )}
-        </button>
+      {/* ---------- CONTENIDO ---------- */}
+      <div className="flex-1 min-w-0 flex flex-col">
 
-        <button
-          onClick={() => setActiveTab('bookings')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'bookings'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Calendar className="w-4 h-4 text-blue-400" />
-          <span>📅 Agenda de Turnos ({bookings.length})</span>
-        </button>
+        {/* Título de la sección + resumen rápido */}
+        <div className="px-4 sm:px-6 lg:px-8 pt-5 lg:pt-7 max-w-7xl w-full mx-auto space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-1">
+            <div>
+              <h1 className="font-display text-2xl sm:text-3xl text-white leading-tight">{tabTitles[activeTab].title}</h1>
+              <p className="text-xs sm:text-sm text-purple-300/70 mt-1">{tabTitles[activeTab].subtitle}</p>
+            </div>
+            <p className="text-[11px] text-purple-300/60 capitalize">{todayLabel}</p>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('schedule')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'schedule'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Clock className="w-4 h-4 text-yellow-400" />
-          <span>⏰ Días y Horarios</span>
-        </button>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <button
+              onClick={() => setActiveTab('pending_balances')}
+              className="text-left p-3 rounded-2xl bg-[#180d28] border border-amber-500/30 hover:border-amber-400/60 transition-colors"
+            >
+              <span className="text-[11px] text-amber-300 font-semibold block">💵 Saldos por cobrar</span>
+              <span className="font-mono font-bold text-lg text-amber-200">{formatMoney(totalPendingBalancesAmount)}</span>
+              <span className="block text-[10px] text-purple-300/60">{totalPendingBalancesCount} {totalPendingBalancesCount === 1 ? 'turno' : 'turnos'}</span>
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('transfer_reported');
+                setActiveTab('bookings');
+              }}
+              className="text-left p-3 rounded-2xl bg-[#180d28] border border-blue-500/30 hover:border-blue-400/60 transition-colors"
+            >
+              <span className="text-[11px] text-blue-300 font-semibold block">🔔 Por verificar</span>
+              <span className="font-mono font-bold text-lg text-blue-200">{transferReportedCount}</span>
+              <span className="block text-[10px] text-purple-300/60">transferencias informadas</span>
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('pending_transfer');
+                setActiveTab('bookings');
+              }}
+              className="text-left p-3 rounded-2xl bg-[#180d28] border border-purple-700/40 hover:border-purple-500/60 transition-colors"
+            >
+              <span className="text-[11px] text-purple-300 font-semibold block">⏳ Esperando seña</span>
+              <span className="font-mono font-bold text-lg text-white">{pendingTransferCount}</span>
+              <span className="block text-[10px] text-purple-300/60">sin transferir aún</span>
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('confirmed');
+                setActiveTab('bookings');
+              }}
+              className="text-left p-3 rounded-2xl bg-[#180d28] border border-emerald-500/30 hover:border-emerald-400/60 transition-colors"
+            >
+              <span className="text-[11px] text-emerald-300 font-semibold block">✅ Confirmados</span>
+              <span className="font-mono font-bold text-lg text-emerald-200">{confirmedCount}</span>
+              <span className="block text-[10px] text-purple-300/60">de {totalBookingsCount} reservas</span>
+            </button>
+          </div>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('manual_booking')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'manual_booking'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
+      {/* Visor de comprobante adjunto */}
+      {viewingReceipt && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setViewingReceipt(null)}
         >
-          <Plus className="w-4 h-4 text-pink-400" />
-          <span>+ Cargar Turno</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('services')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'services'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-pink-300" />
-          <span>Servicios & Precios ({services.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('gallery')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'gallery'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <ImageIcon className="w-4 h-4 text-purple-400" />
-          <span>Fotos Galería ({gallery.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('blocked_dates')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'blocked_dates'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <Ban className="w-4 h-4 text-rose-400" />
-          <span>Feriados</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex items-center gap-2 ${
-            activeTab === 'settings'
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md'
-              : 'text-purple-200/80 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <SettingsIcon className="w-4 h-4 text-neutral-400" />
-          <span>Pagos & Maps</span>
-        </button>
-      </nav>
+          <div className="max-w-lg w-full space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between text-white text-sm">
+              <span className="font-semibold">
+                Comprobante de {viewingReceipt.name} <span className="font-mono text-pink-300">({viewingReceipt.code})</span>
+              </span>
+              <button
+                onClick={() => setViewingReceipt(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={viewingReceipt.url}
+              alt="Comprobante de transferencia"
+              className="w-full max-h-[80vh] object-contain rounded-xl bg-white"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Success Notification Toast */}
       {balanceSuccessToast && (
@@ -976,11 +1051,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="flex flex-wrap items-center gap-2 bg-[#12071f] p-2 rounded-2xl border border-purple-900/60 text-xs">
                 <button
                   onClick={() => {
-                    setCashRegisterDate(new Date().toISOString().split('T')[0]);
+                    setCashRegisterDate(localDateStr());
                     setCashRegisterPeriod('day');
                   }}
                   className={`px-3 py-1.5 rounded-xl font-bold transition-colors ${
-                    cashRegisterPeriod === 'day' && cashRegisterDate === new Date().toISOString().split('T')[0]
+                    cashRegisterPeriod === 'day' && cashRegisterDate === localDateStr()
                       ? 'bg-pink-600 text-white'
                       : 'text-purple-200/70 hover:text-white hover:bg-white/5'
                   }`}
@@ -992,7 +1067,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onClick={() => {
                     const yesterday = new Date();
                     yesterday.setDate(yesterday.getDate() - 1);
-                    setCashRegisterDate(yesterday.toISOString().split('T')[0]);
+                    setCashRegisterDate(localDateStr(yesterday));
                     setCashRegisterPeriod('day');
                   }}
                   className="px-3 py-1.5 rounded-xl text-purple-200/70 hover:text-white hover:bg-white/5 font-medium transition-colors"
@@ -1330,6 +1405,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             Nota: {b.notes}
                           </p>
                         )}
+
+                        {b.receiptImage && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingReceipt({ url: b.receiptImage!, name: b.name, code: b.code })}
+                            className="flex items-center gap-2 p-1.5 pr-3 rounded-xl bg-blue-500/10 border border-blue-400/30 hover:bg-blue-500/20 transition-colors w-fit"
+                            title="Ver la captura del comprobante que adjuntó la clienta"
+                          >
+                            <img src={b.receiptImage} alt="Comprobante" className="w-10 h-10 rounded-md object-cover border border-white/10" />
+                            <span className="text-[11px] font-semibold text-blue-200">Ver comprobante adjunto</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 border-t border-purple-900/60 pt-3">
@@ -1569,6 +1656,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div className="text-neutral-300 italic bg-[#12071f] border border-purple-900/60 p-2 rounded-lg text-[11px]">
                             <strong>Nota:</strong> {b.notes}
                           </div>
+                        )}
+
+                        {b.receiptImage && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingReceipt({ url: b.receiptImage!, name: b.name, code: b.code })}
+                            className="flex items-center gap-2 p-1.5 pr-3 rounded-xl bg-blue-500/10 border border-blue-400/30 hover:bg-blue-500/20 transition-colors w-fit"
+                            title="Ver la captura del comprobante que adjuntó la clienta"
+                          >
+                            <img src={b.receiptImage} alt="Comprobante" className="w-10 h-10 rounded-md object-cover border border-white/10" />
+                            <span className="text-[11px] font-semibold text-blue-200">Ver comprobante adjunto</span>
+                          </button>
                         )}
 
                         <div className="text-neutral-400 pt-1 flex flex-wrap items-center gap-3">
@@ -2502,6 +2601,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
 
       </main>
+      </div>
 
       {/* ================= MODAL: REGISTRAR COBRO DE SALDO ================= */}
       {payingBalanceBooking && (

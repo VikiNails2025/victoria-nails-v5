@@ -4,6 +4,7 @@ import { Hero } from './components/Hero';
 import { ServicesCatalog } from './components/ServicesCatalog';
 import { GallerySection } from './components/GallerySection';
 import { HowItWorks } from './components/HowItWorks';
+import { PoliciesSection } from './components/PoliciesSection';
 import { Footer } from './components/Footer';
 import { BookingModal } from './components/BookingModal';
 import { BookingLookupModal } from './components/BookingLookupModal';
@@ -199,6 +200,8 @@ export default function App() {
           settings={settings}
           onOpenBooking={handleOpenBookingGeneral}
         />
+
+        <PoliciesSection settings={settings} />
       </main>
 
       {/* Footer / Dónde estamos con Google Maps - client only */}

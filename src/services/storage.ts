@@ -147,6 +147,15 @@ export const INITIAL_GALLERY: GalleryPhoto[] = [
   },
 ];
 
+// Fecha local (YYYY-MM-DD): evita el desfase de toISOString(), que usa hora UTC
+export function localDateStr(input: Date | number = new Date()): string {
+  const d = new Date(input);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // Helper to format currency
 export function formatMoney(amount: number): string {
   return '$' + Math.round(amount).toLocaleString('es-AR');
@@ -355,7 +364,7 @@ export const StorageService = {
       const today = new Date();
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowStr = localDateStr(tomorrow);
 
       const sample: Booking[] = [
         {
@@ -479,6 +488,20 @@ export const StorageService = {
       bookings[index].transferReportedAt = Date.now();
     } else if (status === 'confirmed') {
       bookings[index].confirmedAt = Date.now();
+    }
+    this.saveBookings(bookings);
+    return bookings[index];
+  },
+
+  // La clienta adjunta la captura de su transferencia: se guarda en la reserva y queda "por verificar"
+  attachReceipt(id: string, dataUrl: string): Booking | null {
+    const bookings = this.getBookings();
+    const index = bookings.findIndex((b) => b.id === id);
+    if (index === -1) return null;
+    bookings[index].receiptImage = dataUrl;
+    if (bookings[index].status === 'pending_transfer') {
+      bookings[index].status = 'transfer_reported';
+      bookings[index].transferReportedAt = Date.now();
     }
     this.saveBookings(bookings);
     return bookings[index];
@@ -667,7 +690,7 @@ export const StorageService = {
 
     // Check if date is in the past
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = localDateStr(today);
     const isToday = dateStr === todayStr;
     const currentMinutesNow = today.getHours() * 60 + today.getMinutes();
 
