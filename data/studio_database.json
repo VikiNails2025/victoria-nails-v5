@@ -265,6 +265,151 @@
       "category": "Studio"
     }
   ],
-  "bookings": [],
-  "updatedAt": 1792461191266
+  "bookings": [
+    {
+      "id": "b_mviu824h1ppw",
+      "token": "tok_e7r115qzngmviu824h",
+      "code": "VIC-VHRP",
+      "serviceId": "svc-kapping",
+      "serviceName": "Kapping Gel con Nivelación",
+      "duration": 90,
+      "price": 20000,
+      "deposit": 10000,
+      "date": "2026-10-22",
+      "start": "09:00",
+      "end": "10:30",
+      "name": "Flavia Gallego",
+      "phone": "3865303694",
+      "notes": "",
+      "status": "pending_transfer",
+      "createdAt": 1792631018178,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    },
+    {
+      "id": "b_mviueqj7st9s",
+      "token": "tok_um1ifl1v5rmviueqj7",
+      "code": "VIC-XBMY",
+      "serviceId": "svc-esculpidas",
+      "serviceName": "Esculpidas en Acrílico",
+      "duration": 120,
+      "price": 28000,
+      "deposit": 14000,
+      "date": "2026-10-23",
+      "start": "09:30",
+      "end": "11:30",
+      "name": "fggfg",
+      "phone": "2525",
+      "notes": "",
+      "status": "pending_transfer",
+      "createdAt": 1792631329747,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    },
+    {
+      "id": "b_mviujfo8x883",
+      "token": "tok_er81tn4azd8mviujfo8",
+      "code": "VIC-42FQ",
+      "serviceId": "svc-esculpidas",
+      "serviceName": "Esculpidas en Acrílico",
+      "duration": 120,
+      "price": 28000,
+      "deposit": 14000,
+      "date": "2026-10-23",
+      "start": "11:30",
+      "end": "13:30",
+      "name": "ggfgf",
+      "phone": "1516516",
+      "notes": "",
+      "status": "pending_transfer",
+      "createdAt": 1792631548952,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    },
+    {
+      "id": "b_mviusv4weib6",
+      "token": "tok_r9w8h62bvnlmviusv4w",
+      "code": "VIC-W4UM",
+      "serviceId": "svc-esculpidas",
+      "serviceName": "Esculpidas en Acrílico",
+      "duration": 120,
+      "price": 28000,
+      "deposit": 14000,
+      "date": "2026-10-22",
+      "start": "11:30",
+      "end": "13:30",
+      "name": "fgfhgfh",
+      "phone": "22323",
+      "notes": "",
+      "status": "pending_transfer",
+      "createdAt": 1792631988896,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    },
+    {
+      "id": "b_mviva99tprs5",
+      "token": "tok_4r1a8ua5qtrmviva99t",
+      "code": "VIC-68BQ",
+      "serviceId": "svc-kapping",
+      "serviceName": "Kapping Gel con Nivelación",
+      "duration": 90,
+      "price": 20000,
+      "deposit": 10000,
+      "date": "2026-10-22",
+      "start": "13:30",
+      "end": "15:00",
+      "name": "vgvgvg",
+      "phone": "2323233",
+      "notes": "fcfcfcf",
+      "status": "pending_transfer",
+      "createdAt": 1792632800369,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    },
+    {
+      "id": "b_mvivk79ezklq",
+      "token": "tok_efe1vpgx76emvivk79e",
+      "code": "VIC-7FLY",
+      "serviceId": "svc-esculpidas",
+      "serviceName": "Esculpidas en Acrílico",
+      "duration": 120,
+      "price": 28000,
+      "deposit": 14000,
+      "date": "2026-10-22",
+      "start": "15:30",
+      "end": "17:30",
+      "name": "fvvfv",
+      "phone": "232323",
+      "notes": "",
+      "status": "pending_transfer",
+      "createdAt": 1792633264322,
+      "paymentInfo": {
+        "alias": "vic.cordoba02",
+        "cvu": "0000003100015097159874",
+        "titular": "Victoria Fern Cordoba Gallego",
+        "link": "https://mpago.la/2evh28x"
+      }
+    }
+  ],
+  "updatedAt": 1792633264369
 }

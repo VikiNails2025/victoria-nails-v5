@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import fs from 'fs';
+import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,105 +9,86 @@ const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 3000;
+const MONGO_URI = process.env.MONGO_URI;
 
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'studio_database.json');
-
-// Ensure data dir exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// 1. Conectar a MongoDB
+if (MONGO_URI) {
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log('✅ Conectado a MongoDB Atlas'))
+    .catch((err) => console.error('❌ Error MongoDB:', err));
+} else {
+  console.warn('⚠️ MONGO_URI no definida. Los datos no se guardarán.');
 }
 
-// Helpers to read/write persistent database
-function readDatabase(): any {
-  if (!fs.existsSync(DB_FILE)) {
-    return null;
-  }
-  try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading DB:', err);
-    return null;
-  }
-}
+// 2. Definir el esquema (estructura de datos)
+// Usamos un solo documento "global" para simular tu archivo JSON anterior
+const globalDataSchema = new mongoose.Schema({
+  settings: { type: Object, default: {} },
+  services: { type: Array, default: [] },
+  gallery: { type: Array, default: [] },
+  bookings: { type: Array, default: [] },
+}, { timestamps: true });
 
-function writeDatabase(data: any): boolean {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Error writing DB:', err);
-    return false;
+const GlobalData = mongoose.model('GlobalData', globalDataSchema);
+
+// Helper: Obtener o crear el documento principal
+async function getGlobalData() {
+  let data = await GlobalData.findOne();
+  if (!data) {
+    data = await GlobalData.create({ settings: {}, services: [], gallery: [], bookings: [] });
   }
+  return data;
 }
 
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '25mb' }));
 
-  // API endpoints
+  // --- API ENDPOINTS ---
+
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
   });
 
-  // GET all studio data (settings, services, gallery, bookings)
-  app.get('/api/data', (_req, res) => {
-    const data = readDatabase();
-    res.json(data || {});
+  // GET: Obtener todo
+  app.get('/api/data', async (_req, res) => {
+    try {
+      const data = await getGlobalData();
+      res.json(data);
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // POST sync full studio data
-  app.post('/api/sync', (req, res) => {
-    const current = readDatabase() || {};
-    const updated = {
-      ...current,
-      ...req.body,
-      updatedAt: Date.now(),
-    };
-    writeDatabase(updated);
-    res.json({ success: true, data: updated });
+  // POST: Actualizar todo (Sync)
+  app.post('/api/sync', async (req, res) => {
+    try {
+      const data = await getGlobalData();
+      if (req.body.settings) data.settings = req.body.settings;
+      if (req.body.services) data.services = req.body.services;
+      if (req.body.gallery) data.gallery = req.body.gallery;
+      if (req.body.bookings) data.bookings = req.body.bookings;
+      await data.save();
+      res.json({ success: true, data });
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // Specific endpoints
-  app.post('/api/settings', (req, res) => {
-    const current = readDatabase() || {};
-    current.settings = req.body;
-    current.updatedAt = Date.now();
-    writeDatabase(current);
-    res.json({ success: true, settings: current.settings });
-  });
+  // POST: Actualizar secciones específicas
+  const updateSection = async (section: string, req: any, res: any) => {
+    try {
+      const data = await getGlobalData();
+      (data as any)[section] = req.body;
+      await data.save();
+      res.json({ success: true, [section]: (data as any)[section] });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  };
 
-  app.post('/api/services', (req, res) => {
-    const current = readDatabase() || {};
-    current.services = req.body;
-    current.updatedAt = Date.now();
-    writeDatabase(current);
-    res.json({ success: true, services: current.services });
-  });
+  app.post('/api/settings', (req, res) => updateSection('settings', req, res));
+  app.post('/api/services', (req, res) => updateSection('services', req, res));
+  app.post('/api/gallery', (req, res) => updateSection('gallery', req, res));
+  app.post('/api/bookings', (req, res) => updateSection('bookings', req, res));
 
-  app.post('/api/gallery', (req, res) => {
-    const current = readDatabase() || {};
-    current.gallery = req.body;
-    current.updatedAt = Date.now();
-    writeDatabase(current);
-    res.json({ success: true, gallery: current.gallery });
-  });
-
-  app.post('/api/bookings', (req, res) => {
-    const current = readDatabase() || {};
-    current.bookings = req.body;
-    current.updatedAt = Date.now();
-    writeDatabase(current);
-    res.json({ success: true, bookings: current.bookings });
-  });
-
-  // Vite middleware in dev or static files in production
+  // --- VITE / STATIC FILES ---
   if (!isProduction) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
@@ -117,7 +98,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Victoria Nails full-stack server running on http://0.0.0.0:${PORT}`);
+    console.log(` Server running on port ${PORT}`);
   });
 }
 
